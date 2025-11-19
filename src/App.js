@@ -1,7 +1,14 @@
 import React, { useState } from "react";
-import { Activity, Brain, Sparkles, Apple, Refrigerator } from "lucide-react";
-import {LineChart,Line,Tooltip,XAxis,YAxis,ResponsiveContainer,CartesianGrid,} from "recharts";
-
+import { Activity, Brain, Sparkles, Refrigerator } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 
 function App() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -66,15 +73,24 @@ function App() {
     return Math.round(calories);
   };
 
+  // ------------ Updated Metabolism Formula (NEW TEF Integration) ------------
   const bmrVal = Math.round(calcBMR());
   const burnedVal = estimateBurn();
-  const tdeeVal = bmrVal + burnedVal;
 
+  const intake = parseFloat(calories) || 0;
+
+  // NEW: Digestion calories burned (TEF)
+  const digestionBurn = Math.round(intake * 0.10);
+
+  // Updated TDEE formula
+  const tdeeVal = bmrVal + burnedVal + digestionBurn;
+
+  // Updated goal logic
   let recommendedCalories = tdeeVal;
   if (tdeeVal > 0) {
-    if (goal === "cut") recommendedCalories = Math.round(tdeeVal * 0.8);
-    else if (goal === "bulk") recommendedCalories = Math.round(tdeeVal * 1.12);
-    else recommendedCalories = Math.round(tdeeVal * 0.94);
+    if (goal === "cut") recommendedCalories = Math.round(tdeeVal - 350);
+    else if (goal === "bulk") recommendedCalories = Math.round(tdeeVal + 350);
+    else recommendedCalories = Math.round(tdeeVal - 100);
   }
 
   const handleOverviewAnalyze = () => {
@@ -141,14 +157,13 @@ function App() {
       return clamp(score);
     };
 
-    const randleScore = calcRandleScore();
-    const flexScore = calcFlexScore();
-    const absorptionScore = calcAbsorptionScore();
-    const timingScore = calcMealTimingScore();
-    const insulinScore = calcInsulinScore();
-
     const MHI = clamp(
-      (randleScore + flexScore + absorptionScore + timingScore + insulinScore) / 5
+      (calcRandleScore() +
+        calcFlexScore() +
+        calcAbsorptionScore() +
+        calcMealTimingScore() +
+        calcInsulinScore()) /
+        5
     );
 
     const calcRecoveryScore = () => {
@@ -201,6 +216,105 @@ function App() {
     setKeyNotes(notes);
 
     setLoading(false);
+  };
+
+  // -------- Forecast Graph (Recharts) --------
+  const ForecastChart = () => {
+    if (!forecastDays.length) return null;
+
+    const data = forecastDays.map((day, i) => ({
+      day,
+      weight: forecastWeight[i],
+    }));
+
+    return (
+      <div style={{ width: "100%", height: 180 }}>
+        <ResponsiveContainer>
+          <LineChart data={data}>
+            <defs>
+              <linearGradient id="weightLine" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#4f46e5" />
+                <stop offset="100%" stopColor="#22c55e" />
+              </linearGradient>
+            </defs>
+
+            <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+
+            <XAxis
+              dataKey="day"
+              tick={{ fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+            />
+
+            <YAxis
+              tick={{ fontSize: 12 }}
+              width={30}
+              axisLine={false}
+              tickLine={false}
+              domain={["auto", "auto"]}
+            />
+
+            <Tooltip
+              contentStyle={{
+                background: "white",
+                borderRadius: 10,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                border: "none",
+              }}
+              labelStyle={{ fontWeight: 600 }}
+              formatter={(value) => [`${value} kg`, "Weight"]}
+            />
+
+            <Line
+              type="monotone"
+              dataKey="weight"
+              stroke="url(#weightLine)"
+              strokeWidth={3}
+              dot={{ r: 4, fill: "#4f46e5" }}
+              activeDot={{ r: 7, stroke: "#22c55e", strokeWidth: 2 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+  // -------- Score Gauge --------
+  const ScoreGauge = ({ label, score, color }) => {
+    const radius = 40;
+    const circumference = 2 * Math.PI * radius;
+    const pct = Math.max(0, Math.min(100, (score ?? 0) * 10));
+    const offset = circumference * (1 - pct / 100);
+    return (
+      <div style={{ textAlign: "center" }}>
+        <svg width="110" height="110">
+          <circle cx="55" cy="55" r={radius} stroke="#e5e7eb" strokeWidth="8" fill="none" />
+          <circle
+            cx="55"
+            cy="55"
+            r={radius}
+            stroke={color}
+            strokeWidth="8"
+            fill="none"
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+          />
+          <text
+            x="55"
+            y="58"
+            textAnchor="middle"
+            fontSize="18"
+            fontWeight="600"
+            fill="#111827"
+          >
+            {score ?? "--"}
+          </text>
+        </svg>
+        <div style={{ fontSize: 12, color: "#4b5563", marginTop: 4 }}>{label}</div>
+      </div>
+    );
   };
 
   // -------- Micronutrient Table --------
@@ -285,7 +399,6 @@ function App() {
 
   const micros = getMicronutrientRecs();
 
-  // -------- UI styling --------
   const card = {
     background: "white",
     padding: 20,
@@ -313,105 +426,6 @@ function App() {
     </button>
   );
 
-
-const ForecastChart = () => {
-  if (!forecastDays.length) return null;
-
-  // Build data array for Recharts
-  const data = forecastDays.map((day, i) => ({
-    day,
-    weight: forecastWeight[i],
-  }));
-
-  return (
-    <div style={{ width: "100%", height: 180 }}>
-      <ResponsiveContainer>
-        <LineChart data={data}>
-          <defs>
-            <linearGradient id="weightLine" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#4f46e5" />
-              <stop offset="100%" stopColor="#22c55e" />
-            </linearGradient>
-          </defs>
-
-          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-
-          <XAxis
-            dataKey="day"
-            tick={{ fontSize: 12 }}
-            axisLine={false}
-            tickLine={false}
-          />
-
-          <YAxis
-            tick={{ fontSize: 12 }}
-            width={30}
-            axisLine={false}
-            tickLine={false}
-            domain={["auto", "auto"]}
-          />
-
-          <Tooltip
-            contentStyle={{
-              background: "white",
-              borderRadius: 10,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-              border: "none",
-            }}
-            labelStyle={{ fontWeight: 600 }}
-            formatter={(value) => [`${value} kg`, "Weight"]}
-          />
-
-          <Line
-            type="monotone"
-            dataKey="weight"
-            stroke="url(#weightLine)"
-            strokeWidth={3}
-            dot={{ r: 4, fill: "#4f46e5" }}
-            activeDot={{ r: 7, stroke: "#22c55e", strokeWidth: 2 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-};
-
-  const ScoreGauge = ({ label, score, color }) => {
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    const pct = Math.max(0, Math.min(100, (score ?? 0) * 10));
-    const offset = circumference * (1 - pct / 100);
-    return (
-      <div style={{ textAlign: "center" }}>
-        <svg width="110" height="110">
-          <circle cx="55" cy="55" r={radius} stroke="#e5e7eb" strokeWidth="8" fill="none" />
-          <circle
-            cx="55"
-            cy="55"
-            r={radius}
-            stroke={color}
-            strokeWidth="8"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-          />
-          <text
-            x="55"
-            y="58"
-            textAnchor="middle"
-            fontSize="18"
-            fontWeight="600"
-            fill="#111827"
-          >
-            {score ?? "--"}
-          </text>
-        </svg>
-        <div style={{ fontSize: 12, color: "#4b5563", marginTop: 4 }}>{label}</div>
-      </div>
-    );
-  };
-
   return (
     <div
       style={{
@@ -436,8 +450,8 @@ const ForecastChart = () => {
         </h1>
         <p style={{ fontSize: 13, color: "#6b7280" }}>
           An app to optimize your metabolic health.
-
-        A DSSL subsidiary
+          <br />
+          A DSSL subsidiary
         </p>
       </header>
 
@@ -507,6 +521,12 @@ const ForecastChart = () => {
           BMR est: <strong>{bmrVal || "--"}</strong> kcal · Activity est:{" "}
           <strong>{burnedVal || 0}</strong> kcal
         </p>
+
+        {/* NEW TEF VALUE DISPLAYED */}
+        <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+          Digestion burn (TEF): <strong>{digestionBurn || 0}</strong> kcal
+        </p>
+
         <p style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
           Recommended calories for <strong>{goal}</strong>:{" "}
           <strong>{recommendedCalories || "--"}</strong> kcal/day
