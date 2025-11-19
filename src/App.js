@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Activity, Brain, Sparkles, Apple, Refrigerator } from "lucide-react";
+import {LineChart,Line,Tooltip,XAxis,YAxis,ResponsiveContainer,CartesianGrid,} from "recharts";
+
 
 function App() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -311,39 +313,68 @@ function App() {
     </button>
   );
 
-  const ForecastChart = () => {
-    if (!forecastDays.length) return null;
-    const w = 260;
-    const h = 80;
-    const weights = forecastWeight;
-    const minW = Math.min(...weights);
-    const maxW = Math.max(...weights);
-    const span = maxW - minW || 1;
-    const points = weights
-      .map((val, i) => {
-        const x = (i / (weights.length - 1 || 1)) * (w - 20) + 10;
-        const y = h - ((val - minW) / span) * (h - 20) - 10;
-        return `${x},${y}`;
-      })
-      .join(" ");
 
-    return (
-      <svg width={w} height={h}>
-        <defs>
-          <linearGradient id="grad" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="#4f46e5" />
-            <stop offset="100%" stopColor="#22c55e" />
-          </linearGradient>
-        </defs>
-        <polyline
-          points={points}
-          fill="none"
-          stroke="url(#grad)"
-          strokeWidth="3"
-        />
-      </svg>
-    );
-  };
+const ForecastChart = () => {
+  if (!forecastDays.length) return null;
+
+  // Build data array for Recharts
+  const data = forecastDays.map((day, i) => ({
+    day,
+    weight: forecastWeight[i],
+  }));
+
+  return (
+    <div style={{ width: "100%", height: 180 }}>
+      <ResponsiveContainer>
+        <LineChart data={data}>
+          <defs>
+            <linearGradient id="weightLine" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#4f46e5" />
+              <stop offset="100%" stopColor="#22c55e" />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+
+          <XAxis
+            dataKey="day"
+            tick={{ fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+          />
+
+          <YAxis
+            tick={{ fontSize: 12 }}
+            width={30}
+            axisLine={false}
+            tickLine={false}
+            domain={["auto", "auto"]}
+          />
+
+          <Tooltip
+            contentStyle={{
+              background: "white",
+              borderRadius: 10,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              border: "none",
+            }}
+            labelStyle={{ fontWeight: 600 }}
+            formatter={(value) => [`${value} kg`, "Weight"]}
+          />
+
+          <Line
+            type="monotone"
+            dataKey="weight"
+            stroke="url(#weightLine)"
+            strokeWidth={3}
+            dot={{ r: 4, fill: "#4f46e5" }}
+            activeDot={{ r: 7, stroke: "#22c55e", strokeWidth: 2 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
   const ScoreGauge = ({ label, score, color }) => {
     const radius = 40;
@@ -406,7 +437,7 @@ function App() {
         <p style={{ fontSize: 13, color: "#6b7280" }}>
           An app to optimize your metabolic health.
 
-        A DSSL subsidiary.
+        A DSSL subsidiary
         </p>
       </header>
 
